@@ -12,7 +12,7 @@ from boto.swf.exceptions import SWFTypeAlreadyExistsError
 import boto.swf.layer2 as swf
 import functools
 import json
-import traceback
+import os
 
 from garcon import activity
 from garcon import event
@@ -34,6 +34,7 @@ class DeciderWorker(swf.Decider):
         self.activities = activity.find_workflow_activities(flow)
         self.task_list = flow.name
         self.on_exception = getattr(flow, 'on_exception', None)
+        self.identity = 'decider_{}'.format(os.getpid())
         super(DeciderWorker, self).__init__()
 
         if register:
@@ -179,7 +180,7 @@ class DeciderWorker(swf.Decider):
             if self.on_exception:
                 self.on_exception(self, e)
 
-    def run(self):
+    def run(self, identity=None):
         """Run the decider.
 
         The decider defines which task needs to be launched and when based on
@@ -198,7 +199,8 @@ class DeciderWorker(swf.Decider):
         """
 
         try:
-            poll = self.poll()
+            if self.identity:
+                poll = self.poll(identity=str(self.identity))
         except Exception as error:
             # Catch exceptions raised during poll() to avoid a Decider thread
             # dying & the daemon unable to process subsequent workflows.

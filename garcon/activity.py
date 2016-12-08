@@ -37,10 +37,12 @@ Create an activity::
 
 """
 
+import threading
 from threading import Thread
 import boto.swf.layer2 as swf
 import itertools
 import json
+import os
 
 from garcon import log
 from garcon import utils
@@ -235,9 +237,9 @@ class ActivityInstance:
                     'execution.workflow_id')
             })
 
+            activity_input.update(self.execution_context.items())
         except runner.NoRunnerRequirementsFound:
             return self.global_context
-
         return activity_input
 
 
@@ -245,7 +247,7 @@ class Activity(swf.ActivityWorker, log.GarconLogger):
     version = '1.0'
     task_list = None
 
-    def run(self):
+    def run(self, identity=None):
         """Activity Runner.
 
         Information is being pulled down from SWF and it checks if the Activity
@@ -254,7 +256,9 @@ class Activity(swf.ActivityWorker, log.GarconLogger):
         """
 
         try:
-            activity_task = self.poll()
+            if identity:
+                self.logger.info('Polling with {}'.format(identity))
+            activity_task = self.poll(identity=identity)
         except Exception as error:
             # Catch exceptions raised during poll() to avoid an Activity thread
             # dying & worker daemon unable to process the affected Activity.
@@ -528,7 +532,9 @@ def worker_runner(worker):
         worker (object): the Activity worker.
     """
 
-    while(worker.run()):
+    identity = 'activity_{}_{}'.format(os.getpid(), threading.get_ident())
+    print('Starting activity worker {} with id {}'.format(worker.name, identity))
+    while(worker.run(identity=identity)):
         continue
 
 
