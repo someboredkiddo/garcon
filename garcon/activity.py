@@ -37,12 +37,10 @@ Create an activity::
 
 """
 
-import threading
 from threading import Thread
 import boto.swf.layer2 as swf
 import itertools
 import json
-import os
 
 from garcon import log
 from garcon import utils
@@ -216,13 +214,18 @@ class ActivityInstance:
 
         AWS has a limit on the number of characters that can be used (32k). If
         you use the `task.decorate`, the data sent to the activity is optimized
-        to match the values of the context as well as the execution context.
+        to match the values of the context.
 
         Return:
             dict: the input to send to the activity.
         """
-
+        print('activity_name {}'.format(self.activity_name))
         activity_input = dict()
+        import pprint
+        print('global')
+        pprint.pprint(self.global_context)
+        print('execution')
+        pprint.pprint(self.execution_context)
 
         try:
             for requirement in self.runner.requirements(self.global_context):
@@ -247,7 +250,7 @@ class Activity(swf.ActivityWorker, log.GarconLogger):
     version = '1.0'
     task_list = None
 
-    def run(self, identity=None):
+    def run(self):
         """Activity Runner.
 
         Information is being pulled down from SWF and it checks if the Activity
@@ -289,7 +292,7 @@ class Activity(swf.ActivityWorker, log.GarconLogger):
                 # activity to be updated – it throws an exception which stops
                 # the worker immediately.
                 try:
-                    self.fail(reason=str(error)[:255])
+                    self.fail(reason=str(error))
                     if self.on_exception:
                         self.on_exception(self, error)
                 except:
@@ -517,7 +520,7 @@ class ActivityState:
             raise Exception('Result is ummutable – it should not be changed.')
         self._result = result
 
-    def wait(self):
+    def wait():
         """Wait until ready.
         """
 
@@ -532,9 +535,7 @@ def worker_runner(worker):
         worker (object): the Activity worker.
     """
 
-    identity = 'activity_{}_{}'.format(os.getpid(), threading.get_ident())
-    print('Starting activity worker {} with id {}'.format(worker.name, identity))
-    while(worker.run(identity=identity)):
+    while(worker.run()):
         continue
 
 
