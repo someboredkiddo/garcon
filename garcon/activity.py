@@ -37,10 +37,11 @@ Create an activity::
 
 """
 
-from threading import Thread
 import boto.swf.layer2 as swf
 import itertools
 import json
+import os
+import threading
 
 from garcon import log
 from garcon import utils
@@ -214,18 +215,13 @@ class ActivityInstance:
 
         AWS has a limit on the number of characters that can be used (32k). If
         you use the `task.decorate`, the data sent to the activity is optimized
-        to match the values of the context.
+        to match the values of the context as well as the execution context.
 
         Return:
             dict: the input to send to the activity.
         """
-        print('activity_name {}'.format(self.activity_name))
+
         activity_input = dict()
-        import pprint
-        print('global')
-        pprint.pprint(self.global_context)
-        print('execution')
-        pprint.pprint(self.execution_context)
 
         try:
             for requirement in self.runner.requirements(self.global_context):
@@ -243,6 +239,7 @@ class ActivityInstance:
             activity_input.update(self.execution_context.items())
         except runner.NoRunnerRequirementsFound:
             return self.global_context
+
         return activity_input
 
 
@@ -250,7 +247,7 @@ class Activity(swf.ActivityWorker, log.GarconLogger):
     version = '1.0'
     task_list = None
 
-    def run(self):
+    def run(self, identity=None):
         """Activity Runner.
 
         Information is being pulled down from SWF and it checks if the Activity
@@ -292,7 +289,7 @@ class Activity(swf.ActivityWorker, log.GarconLogger):
                 # activity to be updated – it throws an exception which stops
                 # the worker immediately.
                 try:
-                    self.fail(reason=str(error))
+                    self.fail(reason=str(error)[:255])
                     if self.on_exception:
                         self.on_exception(self, error)
                 except:
@@ -445,7 +442,7 @@ class ActivityWorker():
             if (self.worker_activities and
                     activity.name not in self.worker_activities):
                 continue
-            Thread(target=worker_runner, args=(activity,)).start()
+            threading.Thread(target=worker_runner, args=(activity,)).start()
 
 
 class ActivityState:
@@ -520,7 +517,7 @@ class ActivityState:
             raise Exception('Result is ummutable – it should not be changed.')
         self._result = result
 
-    def wait():
+    def wait(self):
         """Wait until ready.
         """
 
@@ -535,7 +532,10 @@ def worker_runner(worker):
         worker (object): the Activity worker.
     """
 
-    while(worker.run()):
+    identity = 'activity_{}_{}'.format(os.getpid(), threading.get_ident())
+    print('Starting activity worker {} with id {}'.format(
+        worker.name, identity))
+    while(worker.run(identity=identity)):
         continue
 
 
