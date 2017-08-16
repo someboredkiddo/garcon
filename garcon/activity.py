@@ -282,6 +282,7 @@ class Activity(swf.ActivityWorker, log.GarconLogger):
 
         if 'activityId' in activity_task:
             try:
+                # executing
                 context = self.execute_activity(context)
                 self.complete(result=json.dumps(context))
             except Exception as error:
@@ -438,6 +439,7 @@ class ActivityWorker():
         """Run the activities.
         """
 
+        print(self.activities)
         for activity in self.activities:
             if (self.worker_activities and
                     activity.name not in self.worker_activities):
@@ -528,12 +530,15 @@ class ActivityState:
 def worker_runner(worker):
     """Run indefinitely the worker.
 
+    Should be treated as helper method for development. Production workflows should
+
     Args:
         worker (object): the Activity worker.
     """
 
     identity = 'activity_{}_{}'.format(os.getpid(), threading.get_ident())
-    print('Starting activity worker {} with id {}'.format(
+    garcon_logger = log.GarconLogger()
+    garcon_logger.logger.info('Starting activity worker {} with id {}'.format(
         worker.name, identity))
     while(worker.run(identity=identity)):
         continue

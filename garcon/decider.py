@@ -16,6 +16,7 @@ import os
 
 from garcon import activity
 from garcon import event
+from garcon import log
 
 
 class DeciderWorker(swf.Decider):
@@ -34,7 +35,6 @@ class DeciderWorker(swf.Decider):
         self.activities = activity.find_workflow_activities(flow)
         self.task_list = flow.name
         self.on_exception = getattr(flow, 'on_exception', None)
-        self.identity = 'decider_{}'.format(os.getpid())
         super(DeciderWorker, self).__init__()
 
         if register:
@@ -199,8 +199,7 @@ class DeciderWorker(swf.Decider):
         """
 
         try:
-            if self.identity:
-                poll = self.poll(identity=str(self.identity))
+            poll = self.poll(identity=identity)
         except Exception as error:
             # Catch exceptions raised during poll() to avoid a Decider thread
             # dying & the daemon unable to process subsequent workflows.
