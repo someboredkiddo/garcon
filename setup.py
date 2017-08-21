@@ -3,6 +3,9 @@ from setuptools import setup
 from codecs import open
 from os import path
 
+from garcon import __version__
+
+
 here = path.abspath(path.dirname(__file__))
 # Get the long description from the README file
 with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
@@ -10,13 +13,13 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 
 setup(
-    name='Garcon',
-    version='0.3.5',
-    url='https://github.com/xethorn/garcon/',
-    author='Michael Ortali',
-    author_email='hello@xethorn.net',
+    name='owsgarcon',
+    version=__version__,
+    url='https://github.com/theorchard/garcon/',
+    author='The Orchard',
+    author_email='webdev@theorchard.com',
     description=(
-        'Lightweight library for AWS SWF.'),
+        'Orchard Fork of Lightweight library for AWS SWF.'),
     long_description=long_description,
     license='MIT',
     packages=find_packages(),
