@@ -9,6 +9,8 @@ executed and when based on the flow procided.
 
 from boto.swf.exceptions import SWFDomainAlreadyExistsError
 from boto.swf.exceptions import SWFTypeAlreadyExistsError
+import backoff
+import boto.exception as boto_exception
 import boto.swf.layer2 as swf
 import functools
 import json
@@ -16,9 +18,11 @@ import traceback
 
 from garcon import activity
 from garcon import event
+from garcon import log
+from garcon import utils
 
 
-class DeciderWorker(swf.Decider):
+class DeciderWorker(swf.Decider, log.GarconLogger):
 
     def __init__(self, flow, register=True):
         """Initialize the Decider Worker.
@@ -138,6 +142,7 @@ class DeciderWorker(swf.Decider):
             decisions.fail_workflow_execution(reason=str(e))
             if self.on_exception:
                 self.on_exception(self, e)
+                self.logger.error(e, exc_info=True)
 
     def delegate_decisions(self, decisions, decider, history, context):
         """Delegate the decisions.
@@ -178,6 +183,25 @@ class DeciderWorker(swf.Decider):
             decisions.fail_workflow_execution(reason=str(e))
             if self.on_exception:
                 self.on_exception(self, e)
+                self.logger.error(e, exc_info=True)
+
+    @backoff.on_exception(
+        backoff.expo,
+        boto_exception.SWFResponseError,
+        max_tries=5,
+        giveup=utils.non_throttle_error,
+        on_backoff=utils.throttle_backoff_handler,
+        jitter=backoff.full_jitter)
+    def poll_for_decision(self):
+        """Runs Activity Poll.
+
+        If a SWF throttling exception is raised during a poll, the poll will
+        be retried up to 5 times using exponential backoff algorithm.
+
+        Upgrading to boto3 would make this retry logic redundant.
+        """
+
+        return self.poll()
 
     def run(self):
         """Run the decider.
@@ -198,7 +222,7 @@ class DeciderWorker(swf.Decider):
         """
 
         try:
-            poll = self.poll()
+            poll = self.poll_for_decision()
         except Exception as error:
             # Catch exceptions raised during poll() to avoid a Decider thread
             # dying & the daemon unable to process subsequent workflows.
@@ -209,7 +233,7 @@ class DeciderWorker(swf.Decider):
             # when such an exception occurs.
             if self.on_exception:
                 self.on_exception(self, error)
-            # todo: Add log exception
+            self.logger.error(error, exc_info=True)
             return True
 
         custom_decider = getattr(self.flow, 'decider', None)
