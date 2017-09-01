@@ -119,10 +119,13 @@ def test_running_workflow_exception(monkeypatch):
     d.poll = MagicMock(return_value=decider_events.history)
     d.complete = MagicMock()
     d.create_decisions_from_flow = MagicMock()
-    d.poll.side_effect = Exception('test')
+    exception = Exception('test')
+    d.poll.side_effect = exception
     d.on_exception = MagicMock()
+    d.logger.error = MagicMock()
     d.run()
     assert d.on_exception.called
+    d.logger.error.assert_called_with(exception, exc_info=True)
     assert not d.complete.called
 
 

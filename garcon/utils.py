@@ -59,8 +59,8 @@ def throttle_backoff_handler(details):
                 value: value triggering backoff (on_predicate decorator only).
     """
 
-    activity = details['args'][0]
-    activity.logger.info(
+    worker = details['args'][0]
+    worker.logger.info(
         'Throttle Exception occurred on try {}. '
         'Sleeping for {} seconds'.format(
             details['tries'], details['wait']))
