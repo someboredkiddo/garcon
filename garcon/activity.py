@@ -37,12 +37,13 @@ Create an activity::
 
 """
 
-from threading import Thread
 import backoff
 import boto.exception as boto_exception
 import boto.swf.layer2 as swf
 import itertools
 import json
+import os
+import threading
 
 from garcon import log
 from garcon import utils
@@ -254,7 +255,7 @@ class Activity(swf.ActivityWorker, log.GarconLogger):
         giveup=utils.non_throttle_error,
         on_backoff=utils.throttle_backoff_handler,
         jitter=backoff.full_jitter)
-    def poll_for_activity(self):
+    def poll_for_activity(self, identity=None):
         """Runs Activity Poll.
 
         If a SWF throttling exception is raised during a poll, the poll will
@@ -263,9 +264,9 @@ class Activity(swf.ActivityWorker, log.GarconLogger):
         Upgrading to boto3 would make this retry logic redundant.
         """
 
-        return self.poll()
+        return self.poll(identity=identity)
 
-    def run(self):
+    def run(self, identity=None):
         """Activity Runner.
 
         Information is being pulled down from SWF and it checks if the Activity
@@ -274,7 +275,9 @@ class Activity(swf.ActivityWorker, log.GarconLogger):
         """
 
         try:
-            activity_task = self.poll_for_activity()
+            if identity:
+                self.logger.debug('Polling with {}'.format(identity))
+            activity_task = self.poll_for_activity(identity)
         except Exception as error:
             # Catch exceptions raised during poll() to avoid an Activity thread
             # dying & worker daemon unable to process the affected Activity.
@@ -418,7 +421,7 @@ class ExternalActivity(Activity):
 
         self.runner = runner.External(timeout=timeout, heartbeat=heartbeat)
 
-    def run(self):
+    def run(self, *args, **kwargs):
         """Run the external activity.
 
         This activity is handled outside, so the run method should remain
@@ -453,12 +456,11 @@ class ActivityWorker():
     def run(self):
         """Run the activities.
         """
-
         for activity in self.activities:
             if (self.worker_activities and
                     activity.name not in self.worker_activities):
                 continue
-            Thread(target=worker_runner, args=(activity,)).start()
+            threading.Thread(target=worker_runner, args=(activity,)).start()
 
 
 class ActivityState:
@@ -544,11 +546,17 @@ class ActivityState:
 def worker_runner(worker):
     """Run indefinitely the worker.
 
+    Worker is given an identity of: activity_<process_pid>_<thread_id>.
+
     Args:
         worker (object): the Activity worker.
     """
 
-    while(worker.run()):
+    identity = 'activity_{}_{}'.format(os.getpid(), threading.get_ident())
+
+    worker.logger.info('Starting activity worker {} with id {}'.format(
+        worker.name, identity))
+    while(worker.run(identity=identity)):
         continue
 
 
